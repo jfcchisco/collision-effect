@@ -2,32 +2,41 @@ class StartScene extends Phaser.Scene {
   constructor() {
     super({ key: 'StartScene' });
   }
-
   create() {
-    const centerX = this.cameras.main.width / 2;
-    const centerY = this.cameras.main.height / 2;
+    const centerX = this.scale.width / 2;
+    const centerY = this.scale.height / 2;
 
-    this.add.text(centerX, centerY - 80, 'Collision Effect', {
+    this.titleText = this.add.text(centerX, centerY - 80, 'Collision Effect', {
       fontSize: '48px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#f3f4f6'
     }).setOrigin(0.5);
 
-    const startButton = this.add.rectangle(centerX, centerY + 40, 220, 70, 0x3b82f6);
-    startButton.setStrokeStyle(3, 0xffffff);
-    startButton.setInteractive({ useHandCursor: true });
+    this.startButton = this.add.rectangle(centerX, centerY + 40, 220, 70, 0x3b82f6);
+    this.startButton.setStrokeStyle(3, 0xffffff);
+    this.startButton.setInteractive({ useHandCursor: true });
 
-    this.add.text(centerX, centerY + 40, 'Start', {
+    this.startButtonText = this.add.text(centerX, centerY + 40, 'Start', {
       fontSize: '28px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0.5);
 
-    startButton.on('pointerdown', () => {
+    this.startButton.on('pointerdown', () => {
       this.scene.start('LevelScene');
     });
+
+    this.scale.on('resize', this.onResize, this);
+  }
+
+  onResize(gameSize) {
+    const centerX = gameSize.width / 2;
+    const centerY = gameSize.height / 2;
+    if (this.titleText) this.titleText.setPosition(centerX, centerY - 80);
+    if (this.startButton) this.startButton.setPosition(centerX, centerY + 40);
+    if (this.startButtonText) this.startButtonText.setPosition(centerX, centerY + 40);
   }
 }
 
@@ -83,37 +92,43 @@ class LevelScene extends Phaser.Scene {
 
     this.updateOrbInteractivity();
 
-    this.statusText = this.add.text(32, 520, '', {
+    this.statusText = this.add.text(32, this.scale.height - 120, '', {
       fontSize: '28px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0);
 
-    this.add.text(32, 560, `Press R to restart | Level ${this.levelIndex + 1}`, {
+    this.infoText = this.add.text(32, this.scale.height - 80, `Press R to restart | Level ${this.levelIndex + 1}`, {
       fontSize: '18px',
       fontFamily: 'Arial',
       color: '#cbd5e1'
     }).setOrigin(0);
 
     this.createNavigationButtons();
+    this.positionLevelUI();
+    this.scale.on('resize', this.onResize, this);
 
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
   }
 
   createNavigationButtons() {
-    const homeButton = this.add.rectangle(500, 720, 90, 42, 0x374151);
-    homeButton.setStrokeStyle(2, 0xffffff);
-    homeButton.setInteractive({ useHandCursor: true });
-    this.add.text(500, 720, 'Home', {
+    const buttonY = this.scale.height - 60;
+    const homeX = this.scale.width - 170;
+    const nextX = this.scale.width - 60;
+
+    this.homeButton = this.add.rectangle(homeX, buttonY, 90, 42, 0x374151);
+    this.homeButton.setStrokeStyle(2, 0xffffff);
+    this.homeButton.setInteractive({ useHandCursor: true });
+    this.homeButtonText = this.add.text(homeX, buttonY, 'Home', {
       fontSize: '20px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0.5);
-    homeButton.on('pointerdown', () => this.scene.start('StartScene'));
+    this.homeButton.on('pointerdown', () => this.scene.start('StartScene'));
 
-    this.nextLevelButton = this.add.rectangle(500, 680, 130, 42, 0x22c55e);
+    this.nextLevelButton = this.add.rectangle(nextX, buttonY, 130, 42, 0x22c55e);
     this.nextLevelButton.setStrokeStyle(2, 0xffffff);
     this.nextLevelButton.setInteractive({ useHandCursor: true });
     this.nextLevelButton.setVisible(false);
@@ -125,13 +140,34 @@ class LevelScene extends Phaser.Scene {
       }
     });
 
-    this.nextLevelText = this.add.text(500, 680, 'Next Level', {
+    this.nextLevelText = this.add.text(nextX, buttonY, 'Next Level', {
       fontSize: '20px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0.5);
     this.nextLevelText.setVisible(false);
+  }
+
+  positionLevelUI() {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const buttonY = height - 60;
+    const homeX = width - 170;
+    const nextX = width - 60;
+
+    if (this.statusText) this.statusText.setPosition(32, height - 120);
+    if (this.infoText) this.infoText.setPosition(32, height - 80);
+
+    if (this.homeButton) this.homeButton.setPosition(homeX, buttonY);
+    if (this.homeButtonText) this.homeButtonText.setPosition(homeX, buttonY);
+    if (this.nextLevelButton) this.nextLevelButton.setPosition(nextX, buttonY);
+    if (this.nextLevelText) this.nextLevelText.setPosition(nextX, buttonY);
+  }
+
+  onResize(gameSize) {
+    if (!gameSize) return;
+    this.positionLevelUI();
   }
 
   getLevels() {
@@ -289,11 +325,15 @@ class LevelScene extends Phaser.Scene {
 
 const config = {
   type: Phaser.AUTO,
-  width: 600,
-  height: 800,
-  parent: 'game',
+  scale: {
+    parent: 'game',
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 480,
+    height: 900
+  },
   backgroundColor: '#111827',
   scene: [StartScene, LevelScene]
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);

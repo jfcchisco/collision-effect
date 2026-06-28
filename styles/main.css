@@ -13,6 +13,10 @@ body {
 }
 
 #game {
+  width: min(100vw, 480px);
+  height: min(100vh, 900px);
+  max-width: 480px;
+  max-height: 900px;
   border: 2px solid #374151;
   border-radius: 12px;
   overflow: hidden;

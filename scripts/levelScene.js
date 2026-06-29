@@ -93,6 +93,7 @@ export class LevelScene extends Phaser.Scene {
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0.5);
+    this.pauseButton.on('pointerdown', () => this.togglePause());
 
     this.createBottomButtons();
     this.positionLevelUI();
@@ -134,10 +135,9 @@ export class LevelScene extends Phaser.Scene {
     const buttonWidth = 180;
     const buttonHeight = 48;
     const buttonY = [0, 55, 110];
-    const labels = ['Next Level', 'Retry', 'Home'];
 
     this.overlayButtons = [];
-    labels.forEach((label, index) => {
+    ['Continue', 'Retry', 'Home'].forEach((label, index) => {
       const button = this.add.rectangle(0, buttonY[index], buttonWidth, buttonHeight, index === 0 ? 0x22c55e : index === 1 ? 0x3b82f6 : 0x374151);
       button.setStrokeStyle(2, 0xffffff);
       button.setInteractive({ useHandCursor: true });
@@ -161,7 +161,7 @@ export class LevelScene extends Phaser.Scene {
     if (!this.scene || !this.scene.isActive()) return;
     if (!this.overlayContainer || !this.overlayBg || !this.overlayContainer.active || !this.overlayBg.active) return;
 
-    const isVisible = this.levelState === 'won' && this.overlayVisible;
+    const isVisible = this.overlayVisible && (this.levelState === 'won' || this.levelState === 'paused');
     this.overlayBg.setVisible(isVisible);
     this.overlayContainer.setVisible(isVisible);
 
@@ -173,21 +173,67 @@ export class LevelScene extends Phaser.Scene {
     this.overlayBg.setSize(width, height);
     this.overlayContainer.setPosition(width / 2, height / 2);
 
+    const isPauseOverlay = this.levelState === 'paused';
     const isLastLevel = this.levelIndex + 1 >= this.getLevels().length;
-    const nextButton = this.overlayButtons && this.overlayButtons[0];
-    if (nextButton) {
-      nextButton.button.setVisible(!isLastLevel);
-      nextButton.text.setVisible(!isLastLevel);
+    const buttonY = [0, 55, 110];
+    const visibleButtons = isPauseOverlay ? [0, 1, 2] : [0, 1, 2];
+
+    if (this.overlayButtons && this.overlayButtons.length) {
+      this.overlayButtons.forEach((entry, index) => {
+        const shouldShow = visibleButtons.includes(index);
+        entry.button.setVisible(shouldShow);
+        entry.text.setVisible(shouldShow);
+
+        if (shouldShow) {
+          const positionIndex = visibleButtons.indexOf(index);
+          entry.button.setPosition(0, buttonY[positionIndex]);
+          entry.text.setPosition(0, buttonY[positionIndex]);
+        }
+      });
     }
 
-    if (isLastLevel) {
+    if (isPauseOverlay) {
+      this.overlayTitle.setText('Paused');
+      this.overlayButtons[0].text.setText('Continue');
+      this.overlayButtons[0].button.setFillStyle(0x22c55e);
+      this.overlayButtons[1].text.setText('Retry');
+      this.overlayButtons[1].button.setFillStyle(0x3b82f6);
+      this.overlayButtons[2].text.setText('Home');
+      this.overlayButtons[2].button.setFillStyle(0x374151);
+      this.overlayButtons[0].text.setText('Continue');
+      this.overlayButtons[0].button.setFillStyle(0x22c55e);
+      this.overlayButtons[1].text.setText('Retry');
+      this.overlayButtons[1].button.setFillStyle(0x3b82f6);
+      this.overlayButtons[2].text.setText('Home');
+      this.overlayButtons[2].button.setFillStyle(0x374151);
+    } else if (isLastLevel) {
       this.overlayTitle.setText('Level Complete');
+      this.overlayButtons[0].text.setText('Next Level');
+      this.overlayButtons[0].button.setFillStyle(0x22c55e);
+      this.overlayButtons[1].text.setText('Retry');
+      this.overlayButtons[1].button.setFillStyle(0x3b82f6);
+      this.overlayButtons[2].text.setText('Home');
+      this.overlayButtons[2].button.setFillStyle(0x374151);
     } else {
       this.overlayTitle.setText('Level Cleared');
+      this.overlayButtons[0].text.setText('Next Level');
+      this.overlayButtons[0].button.setFillStyle(0x22c55e);
+      this.overlayButtons[1].text.setText('Retry');
+      this.overlayButtons[1].button.setFillStyle(0x3b82f6);
+      this.overlayButtons[2].text.setText('Home');
+      this.overlayButtons[2].button.setFillStyle(0x374151);
     }
   }
 
   handleOverlayAction(action) {
+    if (action === 'Continue') {
+      this.levelState = 'active';
+      this.overlayVisible = false;
+      this.updateOrbInteractivity();
+      this.updateOutcomeOverlay();
+      return;
+    }
+
     this.overlayVisible = false;
     this.overlayBg = null;
     this.overlayContainer = null;
@@ -209,6 +255,15 @@ export class LevelScene extends Phaser.Scene {
     if (action === 'Home') {
       this.scene.start('StartScene');
     }
+  }
+
+  togglePause() {
+    if (this.levelState === 'failed' || this.levelState === 'won' || this.levelState === 'paused') return;
+
+    this.levelState = 'paused';
+    this.overlayVisible = true;
+    this.updateOrbInteractivity();
+    this.updateOutcomeOverlay();
   }
 
   createBottomButtons() {

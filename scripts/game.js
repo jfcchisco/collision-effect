@@ -161,10 +161,15 @@ const config = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: 480,
-    height: 900
+    height: 900,
+    expandParent: false
   },
   backgroundColor: '#111827',
-  scene: [StartScene, SelectLevelScene, LevelScene]
+  scene: [StartScene, SelectLevelScene, LevelScene],
+  render: {
+    pixelArt: false,
+    antialias: true
+  }
 };
 
 const game = new Phaser.Game(config);

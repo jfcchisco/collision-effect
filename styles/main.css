@@ -4,7 +4,9 @@ html, body {
   background: #111827;
   color: #f3f4f6;
   font-family: Arial, sans-serif;
-  height: 100%;
+  width: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 body {
@@ -13,10 +15,12 @@ body {
 }
 
 #game {
-  width: min(100vw, 480px);
-  height: min(100vh, 900px);
+  width: min(100dvw, calc(100dvh * 480 / 900));
+  height: min(100dvh, calc(100dvw * 900 / 480));
   max-width: 480px;
   max-height: 900px;
+  aspect-ratio: 480 / 900;
+  box-sizing: border-box;
   border: 2px solid #374151;
   border-radius: 12px;
   overflow: hidden;

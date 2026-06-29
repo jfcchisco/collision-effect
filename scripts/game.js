@@ -173,27 +173,34 @@ class LevelScene extends Phaser.Scene {
   getLevels() {
     return [
       [
-        { x: 120, y: 220, color: 'blue' },
-        { x: 480, y: 220, color: 'red' },
-        { x: 120, y: 380, color: 'red' },
-        { x: 480, y: 380, color: 'blue' }
+        { x: 0.25, y: 0.244, color: 'blue' },
+        { x: 0.85, y: 0.244, color: 'red' },
+        { x: 0.25, y: 0.422, color: 'red' },
+        { x: 0.85, y: 0.422, color: 'blue' }
       ],
       [
-        { x: 120, y: 220, color: 'blue' },
-        { x: 480, y: 220, color: 'red' },
-        { x: 120, y: 380, color: 'red' },
-        { x: 480, y: 380, color: 'blue' },
-        { x: 300, y: 300, color: 'blue' },
-        { x: 200, y: 300, color: 'yellow' },
-        { x: 400, y: 300, color: 'yellow' }
+        { x: 0.25, y: 0.244, color: 'blue' },
+        { x: 0.85, y: 0.244, color: 'red' },
+        { x: 0.25, y: 0.422, color: 'red' },
+        { x: 0.85, y: 0.422, color: 'blue' },
+        { x: 0.625, y: 0.333, color: 'blue' },
+        { x: 0.417, y: 0.333, color: 'yellow' },
+        { x: 0.833, y: 0.333, color: 'yellow' }
       ]
     ];
   }
 
   getLevelSpawnPoints() {
     const levels = this.getLevels();
+    const level = levels[this.levelIndex] || levels[0];
+    const width = this.scale.width;
+    const height = this.scale.height;
 
-    return levels[this.levelIndex] || levels[0];
+    return level.map((entry) => ({
+      x: entry.x * width,
+      y: entry.y * height,
+      color: entry.color
+    }));
   }
 
   updateOrbInteractivity() {

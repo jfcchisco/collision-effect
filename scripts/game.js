@@ -1,3 +1,45 @@
+import { levels } from './levels.js';
+import { LevelScene } from './levelScene.js';
+
+const PROGRESS_STORAGE_KEY = 'collision-effect-solved-levels';
+
+function getSolvedLevels() {
+  try {
+    const raw = window.localStorage.getItem(PROGRESS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value) => Number.isInteger(value) && value >= 0) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveSolvedLevels(solvedLevels) {
+  try {
+    window.localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(solvedLevels));
+  } catch (error) {
+    // Ignore storage errors.
+  }
+}
+
+function markLevelSolved(levelIndex) {
+  const solvedLevels = getSolvedLevels();
+  if (!solvedLevels.includes(levelIndex)) {
+    solvedLevels.push(levelIndex);
+    solvedLevels.sort((a, b) => a - b);
+    saveSolvedLevels(solvedLevels);
+  }
+}
+
+function isLevelUnlocked(levelIndex) {
+  const solvedLevels = getSolvedLevels();
+  return levelIndex === 0 || solvedLevels.includes(levelIndex - 1);
+}
+
+function isLevelSolved(levelIndex) {
+  return getSolvedLevels().includes(levelIndex);
+}
+
 class StartScene extends Phaser.Scene {
   constructor() {
     super({ key: 'StartScene' });
@@ -25,7 +67,7 @@ class StartScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.startButton.on('pointerdown', () => {
-      this.scene.start('LevelScene');
+      this.scene.start('SelectLevelScene');
     });
 
     this.scale.on('resize', this.onResize, this);
@@ -38,295 +80,77 @@ class StartScene extends Phaser.Scene {
     if (this.startButton) this.startButton.setPosition(centerX, centerY + 40);
     if (this.startButtonText) this.startButtonText.setPosition(centerX, centerY + 40);
   }
+
+  shutdown() {
+    if (this.scale) {
+      this.scale.off('resize', this.onResize, this);
+    }
+  }
 }
 
-class LevelScene extends Phaser.Scene {
+class SelectLevelScene extends Phaser.Scene {
   constructor() {
-    super({ key: 'LevelScene' });
-  }
-
-  init(data) {
-    this.levelIndex = data && data.levelIndex !== undefined ? data.levelIndex : 0;
+    super({ key: 'SelectLevelScene' });
   }
 
   create() {
-    this.add.text(32, 28, 'Tap any orb to attract the others.\nDifferent colors must not collide.', {
-      fontSize: '22px',
-      fontFamily: 'Arial',
-      color: '#e5e7eb',
-      lineSpacing: 8
-    }).setOrigin(0);
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const columns = 4;
+    const boxWidth = 84;
+    const boxHeight = 84;
+    const gap = 16;
+    const startX = (width - (columns * boxWidth + (columns - 1) * gap)) / 2;
+    const startY = height / 2 - 70;
 
-    this.add.text(32, 100, `Goal: collapse all ${this.getLevelSpawnPoints().length} orbs into the clicked orb without a color clash.`, {
-      fontSize: '16px',
-      fontFamily: 'Arial',
-      color: '#9ca3af'
-    }).setOrigin(0);
-
-    this.orbRadius = 12;
-    this.orbs = [];
-    this.levelState = 'ready';
-    this.currentTarget = null;
-
-    const spawnPoints = this.getLevelSpawnPoints();
-
-    spawnPoints.forEach((entry) => {
-      const color = entry.color === 'blue' ? 0x3b82f6 : entry.color === 'yellow' ? 0xfacc15 : 0xef4444;
-      const orb = this.add.circle(entry.x, entry.y, this.orbRadius, color);
-      orb.setStrokeStyle(3, 0xffffff);
-      orb.setInteractive({ useHandCursor: true });
-
-      orb.setData('kind', entry.color);
-      orb.setData('moving', false);
-      orb.setData('collected', false);
-      orb.setData('target', null);
-
-      orb.on('pointerdown', () => {
-        if (this.levelState === 'failed' || this.levelState === 'won') return;
-        if (orb.getData('collected') || orb.getData('moving')) return;
-        this.triggerAttraction(orb);
-      });
-
-      this.orbs.push(orb);
-    });
-
-    this.updateOrbInteractivity();
-
-    this.statusText = this.add.text(32, this.scale.height - 120, '', {
-      fontSize: '28px',
+    this.add.text(width / 2, 70, 'Select Level', {
+      fontSize: '32px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#ffffff'
-    }).setOrigin(0);
+    }).setOrigin(0.5);
 
-    this.infoText = this.add.text(32, this.scale.height - 80, `Press R to restart | Level ${this.levelIndex + 1}`, {
-      fontSize: '18px',
-      fontFamily: 'Arial',
-      color: '#cbd5e1'
-    }).setOrigin(0);
-
-    this.createNavigationButtons();
-    this.positionLevelUI();
-    this.scale.on('resize', this.onResize, this);
-
-    this.input.keyboard.on('keydown-R', () => this.scene.restart());
-  }
-
-  createNavigationButtons() {
-    const buttonY = this.scale.height - 60;
-    const homeX = this.scale.width - 170;
-    const nextX = this.scale.width - 60;
-
-    this.homeButton = this.add.rectangle(homeX, buttonY, 90, 42, 0x374151);
-    this.homeButton.setStrokeStyle(2, 0xffffff);
-    this.homeButton.setInteractive({ useHandCursor: true });
-    this.homeButtonText = this.add.text(homeX, buttonY, 'Home', {
+    this.backButton = this.add.rectangle(72, 40, 96, 44, 0x374151);
+    this.backButton.setStrokeStyle(2, 0xffffff);
+    this.backButton.setInteractive({ useHandCursor: true });
+    this.backButton.on('pointerdown', () => this.scene.start('StartScene'));
+    this.add.text(72, 40, 'Back', {
       fontSize: '20px',
       fontFamily: 'Arial',
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0.5);
-    this.homeButton.on('pointerdown', () => this.scene.start('StartScene'));
 
-    this.nextLevelButton = this.add.rectangle(nextX, buttonY, 130, 42, 0x22c55e);
-    this.nextLevelButton.setStrokeStyle(2, 0xffffff);
-    this.nextLevelButton.setInteractive({ useHandCursor: true });
-    this.nextLevelButton.setVisible(false);
-    this.nextLevelButton.on('pointerdown', () => {
-      const nextLevelIndex = this.levelIndex + 1;
-      const levels = this.getLevels();
-      if (nextLevelIndex < levels.length) {
-        this.scene.start('LevelScene', { levelIndex: nextLevelIndex });
+    levels.forEach((level, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const x = startX + column * (boxWidth + gap) + boxWidth / 2;
+      const y = startY + row * (boxHeight + gap) + boxHeight / 2;
+      const unlocked = isLevelUnlocked(index);
+      const solved = isLevelSolved(index);
+      const boxColor = unlocked ? (solved ? 0x22c55e : 0x3b82f6) : 0x374151;
+
+      const box = this.add.rectangle(x, y, boxWidth, boxHeight, boxColor);
+      box.setStrokeStyle(2, 0xffffff);
+      box.setInteractive({ useHandCursor: true });
+
+      const label = unlocked
+        ? this.add.text(x, y - 4, `${index + 1}`, {
+            fontSize: '24px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffffff'
+          }).setOrigin(0.5)
+        : this.add.text(x, y, '🔒', {
+            fontSize: '30px',
+            fontFamily: 'Arial',
+            color: '#e5e7eb'
+          }).setOrigin(0.5);
+
+      if (unlocked) {
+        box.on('pointerdown', () => this.scene.start('LevelScene', { levelIndex: index }));
       }
     });
-
-    this.nextLevelText = this.add.text(nextX, buttonY, 'Next Level', {
-      fontSize: '20px',
-      fontFamily: 'Arial',
-      fontStyle: 'bold',
-      color: '#ffffff'
-    }).setOrigin(0.5);
-    this.nextLevelText.setVisible(false);
-  }
-
-  positionLevelUI() {
-    const width = this.scale.width;
-    const height = this.scale.height;
-    const buttonY = height - 60;
-    const homeX = width - 170;
-    const nextX = width - 60;
-
-    if (this.statusText) this.statusText.setPosition(32, height - 120);
-    if (this.infoText) this.infoText.setPosition(32, height - 80);
-
-    if (this.homeButton) this.homeButton.setPosition(homeX, buttonY);
-    if (this.homeButtonText) this.homeButtonText.setPosition(homeX, buttonY);
-    if (this.nextLevelButton) this.nextLevelButton.setPosition(nextX, buttonY);
-    if (this.nextLevelText) this.nextLevelText.setPosition(nextX, buttonY);
-  }
-
-  onResize(gameSize) {
-    if (!gameSize) return;
-    this.positionLevelUI();
-  }
-
-  getLevels() {
-    return [
-      [
-        { x: 0.25, y: 0.244, color: 'blue' },
-        { x: 0.85, y: 0.244, color: 'red' },
-        { x: 0.25, y: 0.422, color: 'red' },
-        { x: 0.85, y: 0.422, color: 'blue' }
-      ],
-      [
-        { x: 0.25, y: 0.244, color: 'blue' },
-        { x: 0.85, y: 0.244, color: 'red' },
-        { x: 0.25, y: 0.422, color: 'red' },
-        { x: 0.85, y: 0.422, color: 'blue' },
-        { x: 0.625, y: 0.333, color: 'blue' },
-        { x: 0.417, y: 0.333, color: 'yellow' },
-        { x: 0.833, y: 0.333, color: 'yellow' }
-      ]
-    ];
-  }
-
-  getLevelSpawnPoints() {
-    const levels = this.getLevels();
-    const level = levels[this.levelIndex] || levels[0];
-    const width = this.scale.width;
-    const height = this.scale.height;
-
-    return level.map((entry) => ({
-      x: entry.x * width,
-      y: entry.y * height,
-      color: entry.color
-    }));
-  }
-
-  updateOrbInteractivity() {
-    this.orbs.forEach((orb) => {
-      if (this.levelState === 'failed' || this.levelState === 'won' || orb.getData('collected') || orb.getData('moving')) {
-        orb.disableInteractive();
-      } else {
-        orb.setInteractive({ useHandCursor: true });
-      }
-    });
-  }
-
-  triggerAttraction(clickedOrb) {
-    if (clickedOrb.getData('collected') || clickedOrb.getData('moving')) return;
-
-    this.levelState = 'active';
-    this.currentTarget = clickedOrb;
-    clickedOrb.setData('collected', true);
-    const targetKind = clickedOrb.getData('kind');
-
-    this.orbs.forEach((orb) => {
-      if (orb === clickedOrb || orb.getData('collected')) return;
-      if (orb.getData('kind') !== targetKind) return;
-      orb.setData('moving', true);
-      orb.setData('target', clickedOrb);
-    });
-
-    this.updateOrbInteractivity();
-  }
-
-  update(time, delta) {
-    if (this.levelState !== 'active') return;
-
-    const speed = 230;
-    const step = speed * (delta / 1000);
-
-    this.orbs.forEach((orb) => {
-      if (orb.getData('collected') || !orb.getData('moving')) return;
-
-      const target = orb.getData('target');
-      const dx = target.x - orb.x;
-      const dy = target.y - orb.y;
-      const distance = Math.hypot(dx, dy);
-
-      const move = Math.min(step, distance);
-      const nextX = orb.x + (dx / distance) * move;
-      const nextY = orb.y + (dy / distance) * move;
-
-      const collisionTargets = this.orbs.filter((other) => other !== orb);
-      const hit = collisionTargets.some((other) => {
-        if (other.getData('kind') === orb.getData('kind')) return false;
-        return Phaser.Math.Distance.Between(nextX, nextY, other.x, other.y) <= this.orbRadius * 2;
-      });
-
-      if (hit) {
-        this.failLevel();
-        return;
-      }
-
-      orb.x = nextX;
-      orb.y = nextY;
-
-      if (distance <= step) {
-        orb.x = target.x;
-        orb.y = target.y;
-        orb.setData('moving', false);
-        orb.setData('collected', true);
-        orb.setVisible(false);
-        this.updateOrbInteractivity();
-      }
-    });
-
-    this.checkCollisions();
-    this.checkWin();
-  }
-
-  checkCollisions() {
-    if (this.levelState !== 'active') return;
-
-    const collisionCandidates = this.orbs.filter((orb) => orb === this.currentTarget || !orb.getData('collected'));
-
-    for (let i = 0; i < collisionCandidates.length; i++) {
-      for (let j = i + 1; j < collisionCandidates.length; j++) {
-        const a = collisionCandidates[i];
-        const b = collisionCandidates[j];
-
-        if (a === b || a.getData('kind') === b.getData('kind')) continue;
-
-        const distance = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-        if (distance <= this.orbRadius * 2) {
-          this.failLevel();
-          return;
-        }
-      }
-    }
-  }
-
-  checkWin() {
-    if (this.levelState !== 'active' || !this.currentTarget) return;
-
-    const pending = this.orbs.filter((orb) => !orb.getData('collected'));
-    if (pending.length === 0) {
-      this.winLevel();
-    }
-  }
-
-  failLevel() {
-    this.levelState = 'failed';
-    this.updateOrbInteractivity();
-    this.statusText.setText('Level Failed');
-    this.statusText.setColor('#f87171');
-  }
-
-  winLevel() {
-    this.levelState = 'won';
-    this.updateOrbInteractivity();
-    this.statusText.setText(`Level ${this.levelIndex + 1} Cleared`);
-    this.statusText.setColor('#86efac');
-
-    const nextLevelIndex = this.levelIndex + 1;
-    const levels = this.getLevels();
-
-    if (nextLevelIndex < levels.length) {
-      this.nextLevelButton.setVisible(true);
-      this.nextLevelText.setVisible(true);
-    }
   }
 }
 
@@ -340,7 +164,7 @@ const config = {
     height: 900
   },
   backgroundColor: '#111827',
-  scene: [StartScene, LevelScene]
+  scene: [StartScene, SelectLevelScene, LevelScene]
 };
 
 const game = new Phaser.Game(config);

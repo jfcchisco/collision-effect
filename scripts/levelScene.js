@@ -41,7 +41,14 @@ export class LevelScene extends Phaser.Scene {
 
   create() {
     this.orbRadius = 12;
+    this.orbDisplaySize = this.orbRadius * 2 + 4;
     this.orbs = [];
+    this.trailParticles = [];
+    this.trailParticlePersistence = 2;
+    this.trailParticleWidth = 2;
+    this.trailParticleFadeTime = 0.5;
+    this.trailParticleScatter = 10;
+    this.trailParticleRandomness = 2;
     this.levelState = 'ready';
     this.currentTarget = null;
     this.overlayVisible = false;
@@ -50,21 +57,23 @@ export class LevelScene extends Phaser.Scene {
     const spawnPoints = this.getLevelSpawnPoints();
 
     spawnPoints.forEach((entry) => {
-      const color = entry.color === 'blue' ? 0x3b82f6 : entry.color === 'yellow' ? 0xfacc15 : 0xef4444;
-      const glow = this.add.circle(entry.x, entry.y, this.orbRadius + 8, color);
-      glow.setAlpha(0.22);
-      glow.setBlendMode(Phaser.BlendModes.ADD);
-      glow.setDepth(-1);
+      const colorMap = {
+        blue: 0x3b82f6,
+        yellow: 0xfacc15,
+        red: 0xef4444,
+        green: 0x22c55e,
+        orange: 0xf97316
+      };
+      const color = colorMap[entry.color] ?? 0xef4444;
 
-      const orb = this.add.circle(entry.x, entry.y, this.orbRadius, color);
-      orb.setStrokeStyle(3, 0xaaaaaa);
+      const orb = this.createOrbSprite(entry.x, entry.y, color);
       orb.setInteractive({ useHandCursor: true });
 
       orb.setData('kind', entry.color);
       orb.setData('moving', false);
       orb.setData('collected', false);
       orb.setData('target', null);
-      orb.setData('glow', glow);
+      orb.setData('trailColor', color);
 
       orb.on('pointerdown', () => {
         if (this.levelState === 'failed' || this.levelState === 'won') return;
@@ -102,6 +111,70 @@ export class LevelScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
 
     this.createOutcomeOverlay();
+  }
+
+  createOrbSprite(x, y, color) {
+    const textureKey = `orb-${color}`;
+
+    if (!this.textures.exists(textureKey)) {
+      const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+      graphics.fillStyle(color, 1);
+      graphics.fillCircle(128, 128, 112);
+      graphics.lineStyle(10, 0xffffff, 0.35);
+      graphics.strokeCircle(128, 128, 112);
+      graphics.fillStyle(0xffffff, 0.22);
+      graphics.fillCircle(88, 88, 42);
+      graphics.generateTexture(textureKey, 256, 256);
+      graphics.destroy();
+    }
+
+    const sprite = this.add.sprite(x, y, textureKey);
+    sprite.setDisplaySize(this.orbDisplaySize, this.orbDisplaySize);
+    sprite.setOrigin(0.5);
+    return sprite;
+  }
+
+  createTrailParticle(x, y, color) {
+    const scatter = this.trailParticleScatter || 0;
+    const jitterX = (Math.random() - 0.5) * this.trailParticleRandomness * scatter;
+    const jitterY = (Math.random() - 0.5) * this.trailParticleRandomness * scatter;
+    const particleColor = this.getLighterColor(color);
+    const particle = this.add.circle(x + jitterX, y + jitterY, this.trailParticleWidth, particleColor);
+    particle.setAlpha(0.8);
+    particle.setDepth(0);
+    particle.setData('life', this.trailParticlePersistence);
+    particle.setData('maxLife', this.trailParticlePersistence);
+    particle.setData('color', particleColor);
+    this.trailParticles.push(particle);
+  }
+
+  getLighterColor(color) {
+    const hex = color.toString(16).padStart(6, '0');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const mixAmount = 0.45;
+    const lightened = [
+      Math.round(r + (255 - r) * mixAmount),
+      Math.round(g + (255 - g) * mixAmount),
+      Math.round(b + (255 - b) * mixAmount)
+    ];
+    return (lightened[0] << 16) | (lightened[1] << 8) | lightened[2];
+  }
+
+  updateTrailParticles(delta) {
+    const dt = delta / 1000;
+    this.trailParticles = this.trailParticles.filter((particle) => {
+      const life = particle.getData('life') - dt;
+      particle.setData('life', life);
+      const alpha = Math.max(0, life / particle.getData('maxLife'));
+      particle.setAlpha(alpha * 0.8 * (life > this.trailParticleFadeTime ? 1 : Math.max(0, life / this.trailParticleFadeTime)));
+      if (life <= 0) {
+        particle.destroy();
+        return false;
+      }
+      return true;
+    });
   }
 
   createOutcomeOverlay() {
@@ -148,7 +221,12 @@ export class LevelScene extends Phaser.Scene {
         color: '#ffffff'
       }).setOrigin(0.5);
 
-      button.on('pointerdown', () => this.handleOverlayAction(label));
+      button.on('pointerdown', () => {
+        const action = this.levelState === 'paused'
+          ? (index === 0 ? 'Continue' : index === 1 ? 'Retry' : 'Home')
+          : (index === 0 ? 'Next Level' : index === 1 ? 'Retry' : 'Home');
+        this.handleOverlayAction(action);
+      });
       this.overlayContainer.add(button);
       this.overlayContainer.add(text);
       this.overlayButtons.push({ button, text });
@@ -161,7 +239,7 @@ export class LevelScene extends Phaser.Scene {
     if (!this.scene || !this.scene.isActive()) return;
     if (!this.overlayContainer || !this.overlayBg || !this.overlayContainer.active || !this.overlayBg.active) return;
 
-    const isVisible = this.overlayVisible && (this.levelState === 'won' || this.levelState === 'paused');
+    const isVisible = this.overlayVisible && (this.levelState === 'won' || this.levelState === 'paused' || this.levelState === 'failed');
     this.overlayBg.setVisible(isVisible);
     this.overlayContainer.setVisible(isVisible);
 
@@ -174,9 +252,10 @@ export class LevelScene extends Phaser.Scene {
     this.overlayContainer.setPosition(width / 2, height / 2);
 
     const isPauseOverlay = this.levelState === 'paused';
+    const isFailureOverlay = this.levelState === 'failed';
     const isLastLevel = this.levelIndex + 1 >= this.getLevels().length;
     const buttonY = [0, 55, 110];
-    const visibleButtons = isPauseOverlay ? [0, 1, 2] : [0, 1, 2];
+    const visibleButtons = isFailureOverlay ? [1, 2] : [0, 1, 2];
 
     if (this.overlayButtons && this.overlayButtons.length) {
       this.overlayButtons.forEach((entry, index) => {
@@ -200,8 +279,8 @@ export class LevelScene extends Phaser.Scene {
       this.overlayButtons[1].button.setFillStyle(0x3b82f6);
       this.overlayButtons[2].text.setText('Home');
       this.overlayButtons[2].button.setFillStyle(0x374151);
-      this.overlayButtons[0].text.setText('Continue');
-      this.overlayButtons[0].button.setFillStyle(0x22c55e);
+    } else if (isFailureOverlay) {
+      this.overlayTitle.setText('Level Failed');
       this.overlayButtons[1].text.setText('Retry');
       this.overlayButtons[1].button.setFillStyle(0x3b82f6);
       this.overlayButtons[2].text.setText('Home');
@@ -425,6 +504,8 @@ export class LevelScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    this.updateTrailParticles(delta);
+
     if (this.levelState !== 'active') return;
 
     const speed = this.speedMultiplier;
@@ -455,12 +536,7 @@ export class LevelScene extends Phaser.Scene {
 
       orb.x = nextX;
       orb.y = nextY;
-
-      const glow = orb.getData('glow');
-      if (glow) {
-        glow.setPosition(orb.x, orb.y);
-        glow.setVisible(orb.visible);
-      }
+      this.createTrailParticle(orb.x, orb.y, orb.getData('trailColor'));
 
       if (distance <= step) {
         orb.x = target.x;
@@ -468,9 +544,6 @@ export class LevelScene extends Phaser.Scene {
         orb.setData('moving', false);
         orb.setData('collected', true);
         orb.setVisible(false);
-        if (glow) {
-          glow.setVisible(false);
-        }
         this.updateOrbInteractivity();
       }
     });
@@ -511,7 +584,9 @@ export class LevelScene extends Phaser.Scene {
 
   failLevel() {
     this.levelState = 'failed';
+    this.overlayVisible = true;
     this.updateOrbInteractivity();
+    this.updateOutcomeOverlay();
   }
 
   winLevel() {

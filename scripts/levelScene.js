@@ -457,9 +457,13 @@ export class LevelScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
 
+    // A coordinate transformation must be applied
+    // The origin should be at the center of the screen
+    // x and y on the range [-1, 1] should map to 0.15 width and 0.85 width 
+
     return level.map((entry) => ({
-      x: entry.x * width,
-      y: entry.y * height,
+      x: (0.4 * entry.x + 0.5) * width,
+      y: (-0.4 * entry.y + 0.5) * width + (height - width) / 2,
       color: entry.color
     }));
   }

@@ -588,9 +588,7 @@ export class LevelScene extends Phaser.Scene {
 
   failLevel() {
     this.levelState = 'failed';
-    this.overlayVisible = true;
     this.updateOrbInteractivity();
-    this.updateOutcomeOverlay();
   }
 
   winLevel() {
